@@ -1,188 +1,226 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
 
+// Modular Security & Intelligence Scanners
+const { isSsrfSafeHost } = require('./src/security/ssrfProtection');
+const { normalizeAndParseUrl } = require('./src/security/validation');
+const { analyzeDns } = require('./src/scanner/dnsAnalyzer');
+const { analyzeTls } = require('./src/scanner/tlsAnalyzer');
+const { analyzeRedirects } = require('./src/scanner/redirectAnalyzer');
+const { analyzeHeaders } = require('./src/scanner/headerAnalyzer');
+const { analyzePhishingAndObfuscation } = require('./src/scanner/phishingAnalyzer');
+const threatIntelManager = require('./src/intelligence/threatIntelManager');
+const { evaluateRiskAndConfidence } = require('./src/scoring/riskEngine');
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Enable CORS for all routes
+// Enable CORS & JSON Parsing
 app.use(cors());
-
-// Parse JSON request bodies
 app.use(express.json());
 
-// Serve static files from the 'public' folder
+// Serve Static Frontend Assets
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Health check endpoint
+// 1. Health Status API Endpoint
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'healthy',
     timestamp: new Date().toISOString(),
-    uptime: process.uptime()
+    uptime: process.uptime(),
+    system: 'SAVEE AI Security & Global URL Inspector 2.0'
   });
 });
 
-// URL Scanner API Endpoint
-app.post('/api/scan', (req, res) => {
-  const { url } = req.body;
-
-  if (!url || typeof url !== 'string') {
-    return res.status(400).json({ error: 'A valid URL string is required.' });
-  }
-
-  const originalUrl = url.trim();
-  let normalizedUrl = originalUrl;
-
-  // Prepend protocol if missing so we can parse it
-  if (!/^https?:\/\//i.test(normalizedUrl)) {
-    normalizedUrl = 'http://' + normalizedUrl;
-  }
-
-  let parsedUrl;
+// 2. Main URL Investigation API Endpoint
+app.post('/api/scan', async (req, res) => {
   try {
-    parsedUrl = new URL(normalizedUrl);
+    const { url } = req.body;
+
+    if (!url || typeof url !== 'string') {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'INVALID_INPUT', message: 'A valid URL or domain string is required.' }
+      });
+    }
+
+    // A. URL Normalization & Component Extraction
+    let urlInfo;
+    try {
+      urlInfo = normalizeAndParseUrl(url);
+    } catch (err) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'PARSE_ERROR', message: err.message }
+      });
+    }
+
+    // B. SSRF Safety & Local Host Check
+    const ssrfCheck = isSsrfSafeHost(urlInfo.hostname);
+
+    // C. Concurrent Diagnostic Investigations
+    const [dnsInfo, tlsInfo, redirectInfo, headerInfo, threatIntel] = await Promise.all([
+      analyzeDns(urlInfo.hostname),
+      analyzeTls(urlInfo.hostname, urlInfo.port),
+      analyzeRedirects(urlInfo.normalizedUrl),
+      analyzeHeaders(urlInfo.normalizedUrl),
+      threatIntelManager.queryAll(urlInfo.normalizedUrl, urlInfo.hostname)
+    ]);
+
+    // D. Phishing, Brand Impersonation & Obfuscation Analysis
+    const phishingObfuscation = analyzePhishingAndObfuscation(urlInfo);
+
+    // E. Risk Correlation & Confidence Scoring Engine
+    const verdict = evaluateRiskAndConfidence({
+      urlInfo,
+      ssrfCheck,
+      dnsInfo,
+      tlsInfo,
+      redirectInfo,
+      headerInfo,
+      phishingObfuscation,
+      threatIntel
+    });
+
+    // F. Construct Final Intelligence Response
+    const responsePayload = {
+      success: true,
+      url: urlInfo.originalInput,
+      normalizedUrl: urlInfo.normalizedUrl,
+      score: verdict.score,
+      status: verdict.status,
+      confidence: verdict.confidence,
+      targetStatus: verdict.targetStatus,
+      components: {
+        protocol: urlInfo.protocol,
+        hostname: urlInfo.hostname,
+        middleDomain: urlInfo.middleDomain,
+        secondLevelDomain: urlInfo.secondLevelDomain,
+        registeredDomain: urlInfo.registeredDomain,
+        subdomain: urlInfo.subdomain,
+        tld: urlInfo.tld,
+        port: urlInfo.port,
+        path: urlInfo.path,
+        query: urlInfo.query
+      },
+      checks: {
+        https: urlInfo.protocol === 'https:' && tlsInfo.httpsAvailable,
+        suspiciousKeywords: phishingObfuscation.foundKeywords.length > 0,
+        domainReputation: phishingObfuscation.tldReputation ? phishingObfuscation.tldReputation.description : 'Standard',
+        urlLengthAnomaly: urlInfo.length > 75,
+        anomalousCharacters: phishingObfuscation.anomalies.length > 0,
+        brandImpersonation: phishingObfuscation.brandImpersonation ? phishingObfuscation.brandImpersonation.impersonationDetected : false,
+        middleDomainStatus: phishingObfuscation.middleDomainAnalysis.status,
+        middleDomainIssues: phishingObfuscation.middleDomainAnalysis.issues,
+        knownWebsiteMatch: phishingObfuscation.knownWebsiteMatch
+      },
+      dns: {
+        resolvable: dnsInfo.resolvable,
+        a: dnsInfo.a,
+        aaaa: dnsInfo.aaaa,
+        mx: dnsInfo.mx,
+        ns: dnsInfo.ns,
+        txt: dnsInfo.txt,
+        cname: dnsInfo.cname
+      },
+      tls: {
+        httpsAvailable: tlsInfo.httpsAvailable,
+        authorized: tlsInfo.authorized,
+        issuer: tlsInfo.issuer,
+        subject: tlsInfo.subject,
+        daysRemaining: tlsInfo.daysRemaining,
+        protocol: tlsInfo.protocol,
+        error: tlsInfo.error
+      },
+      redirects: {
+        count: redirectInfo.redirectCount,
+        isDowngrade: redirectInfo.isDowngrade,
+        finalDestination: redirectInfo.finalDestination,
+        chain: redirectInfo.chain
+      },
+      headers: {
+        statusCode: headerInfo.statusCode,
+        serverHeader: headerInfo.serverHeader,
+        securityHeaders: headerInfo.securityHeaders,
+        cookieSecurity: headerInfo.cookieSecurity
+      },
+      threatIntel: threatIntel.providers,
+      details: verdict.details,
+      recommendations: verdict.recommendations,
+      timestamp: new Date().toISOString()
+    };
+
+    return res.json(responsePayload);
   } catch (error) {
-    return res.status(400).json({ error: 'Invalid URL format. Please enter a valid URL.' });
+    console.error('Unhandled scan error:', error);
+    return res.status(500).json({
+      success: false,
+      error: { code: 'SERVER_ERROR', message: 'An internal error occurred during analysis.' }
+    });
   }
-
-  const hostname = parsedUrl.hostname.toLowerCase();
-  const pathname = parsedUrl.pathname;
-  
-  // Heuristics variables
-  let score = 0;
-  const details = [];
-  
-  // 1. HTTPS Check
-  const isHttps = parsedUrl.protocol === 'https:';
-  if (!isHttps) {
-    score += 25;
-    details.push('Unencrypted connection (HTTP is used instead of secure HTTPS) (+25)');
-  }
-
-  // 2. IP Hostname Check
-  const ipv4Regex = /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/;
-  const isIpv4 = ipv4Regex.test(hostname);
-  const isIpv6 = hostname.includes(':') && !hostname.includes('.'); // Simplistic IPv6 check
-  const isRawIp = isIpv4 || isIpv6;
-
-  let domainReputation = 'Good';
-  if (isRawIp) {
-    score += 35;
-    domainReputation = 'Dangerous (Raw IP Host)';
-    details.push('Host uses a raw IP address instead of a domain name (+35)');
-  } else {
-    // Check for suspicious TLDs
-    const suspiciousTlds = ['.xyz', '.top', '.club', '.work', '.gq', '.cf', '.tk', '.ml', '.fit', '.date', '.click', '.link', '.zip', '.info'];
-    const hasSuspiciousTld = suspiciousTlds.some(tld => hostname.endsWith(tld));
-    if (hasSuspiciousTld) {
-      score += 20;
-      domainReputation = 'Suspicious (Untrusted TLD)';
-      const tldMatch = suspiciousTlds.find(tld => hostname.endsWith(tld));
-      details.push(`Domain ends with a highly suspicious/untrusted TLD "${tldMatch}" (+20)`);
-    }
-  }
-
-  // 3. Phishing Keywords Check
-  const suspiciousKeywords = [
-    'login', 'verify', 'secure', 'webscr', 'signin', 'banking', 'free-gift', 
-    'claim-reward', 'update-account', 'paypal', 'giftcard', 'admin', 'credential',
-    'account-update', 'recovery', 'support-login', 'bonus', 'claim', 'winner'
-  ];
-  
-  let keywordPenalty = 0;
-  const foundKeywords = [];
-  suspiciousKeywords.forEach(word => {
-    if (originalUrl.toLowerCase().includes(word)) {
-      foundKeywords.push(word);
-      keywordPenalty += 15;
-    }
-  });
-
-  if (keywordPenalty > 0) {
-    const cappedPenalty = Math.min(keywordPenalty, 45);
-    score += cappedPenalty;
-    details.push(`Suspicious phishing keywords found: ${foundKeywords.join(', ')} (+${cappedPenalty})`);
-  }
-
-  // 4. Anomalous Characters & Formatting
-  let anomalousPenalty = 0;
-  let hasAtCharacter = false;
-  let hasExcessiveHyphens = false;
-  let hasDoubleSlashInPath = false;
-
-  if (originalUrl.includes('@')) {
-    anomalousPenalty += 25;
-    hasAtCharacter = true;
-    details.push('Contains URL user obscuring character "@" (+25)');
-  }
-
-  // Count hyphens in the hostname
-  const hyphenCount = (hostname.match(/-/g) || []).length;
-  if (hyphenCount > 3) {
-    anomalousPenalty += 15;
-    hasExcessiveHyphens = true;
-    details.push(`Excessive hyphens in hostname (${hyphenCount} found) (+15)`);
-  }
-
-  // Double slash anomaly in path (excluding the initial http:// or https://)
-  const pathPart = originalUrl.replace(/^https?:\/\//i, '');
-  if (pathPart.includes('//')) {
-    anomalousPenalty += 15;
-    hasDoubleSlashInPath = true;
-    details.push('Contains suspicious consecutive slashes "//" in path (+15)');
-  }
-
-  const hasAnomalousCharacters = hasAtCharacter || hasExcessiveHyphens || hasDoubleSlashInPath;
-  score += anomalousPenalty;
-
-  // 5. URL Length Anomaly
-  let isLongUrl = false;
-  if (originalUrl.length > 120) {
-    score += 25;
-    isLongUrl = true;
-    details.push(`Extremely long URL (${originalUrl.length} characters) (+25)`);
-  } else if (originalUrl.length > 75) {
-    score += 10;
-    isLongUrl = true;
-    details.push(`Suspiciously long URL (${originalUrl.length} characters) (+10)`);
-  }
-
-  // Clamp risk score to max 100 and min 0
-  const finalScore = Math.min(Math.max(score, 0), 100);
-
-  // Categorize risk status
-  let status = 'Safe';
-  if (finalScore > 70) {
-    status = 'Dangerous / Malicious';
-  } else if (finalScore > 30) {
-    status = 'Suspicious';
-  }
-
-  res.json({
-    url: originalUrl,
-    score: finalScore,
-    status: status,
-    checks: {
-      https: isHttps,
-      suspiciousKeywords: foundKeywords.length > 0,
-      domainReputation: domainReputation,
-      urlLengthAnomaly: isLongUrl,
-      anomalousCharacters: hasAnomalousCharacters
-    },
-    details: details.length > 0 ? details : ['No vulnerabilities or suspicious patterns detected.'],
-    timestamp: new Date().toISOString()
-  });
 });
 
-// Fallback to serving index.html for single page app routing
+// 3. Security Investigation Report Generator Endpoint
+app.post('/api/report', (req, res) => {
+  const data = req.body;
+  if (!data || !data.url) {
+    return res.status(400).json({ error: 'Scan result data is required to generate a report.' });
+  }
+
+  const reportText = `===================================================================
+SAVEE // GLOBAL AI SECURITY INVESTIGATION REPORT
+===================================================================
+Target URL:      ${data.url}
+Normalized URL:  ${data.normalizedUrl || data.url}
+Scan Time:       ${data.timestamp || new Date().toISOString()}
+
+-------------------------------------------------------------------
+VERDICT & RISK METRICS
+-------------------------------------------------------------------
+Risk Score:      ${data.score} / 100
+Security Status: ${data.status}
+Confidence:      ${data.confidence}%
+Target Status:   ${data.targetStatus || 'ONLINE'}
+
+-------------------------------------------------------------------
+COMPONENT BREAKDOWN
+-------------------------------------------------------------------
+• Protocol:      ${data.components ? data.components.protocol : 'N/A'}
+• Hostname:      ${data.components ? data.components.hostname : 'N/A'}
+• Registered Domain: ${data.components ? data.components.registeredDomain : 'N/A'}
+• HTTPS Status:  ${data.checks ? (data.checks.https ? 'SECURE (HTTPS)' : 'UNENCRYPTED (HTTP)') : 'N/A'}
+• DNS Status:    ${data.dns ? (data.dns.resolvable ? 'RESOLVABLE' : 'UNRESOLVED') : 'N/A'}
+
+-------------------------------------------------------------------
+RISK INDICATORS & ANOMALIES
+-------------------------------------------------------------------
+${(data.details || []).map((d, i) => `${i + 1}. ${d}`).join('\n')}
+
+-------------------------------------------------------------------
+SECURITY RECOMMENDATIONS
+-------------------------------------------------------------------
+${(data.recommendations || []).map((r, i) => `${i + 1}. ${r}`).join('\n')}
+
+===================================================================
+Report generated by SAVEE AI Security Engine v2.0
+===================================================================`;
+
+  res.setHeader('Content-Type', 'text/plain');
+  res.setHeader('Content-Disposition', `attachment; filename=SAVEE_Report_${Date.now()}.txt`);
+  res.send(reportText);
+});
+
+// Fallback single page application route
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+// Start Server
 app.listen(PORT, () => {
   console.log(`==================================================`);
-  console.log(`🚀 SAVEE - AI Security Server running on port ${PORT}`);
+  console.log(`🚀 SAVEE - Global AI Security Server running on port ${PORT}`);
   console.log(`🔗 Health Check: http://localhost:${PORT}/api/health`);
   console.log(`==================================================`);
 });
