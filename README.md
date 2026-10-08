@@ -11,7 +11,7 @@ SAVEE is a high-fidelity, cyberpunk security investigation platform and global U
   1. **URL Normalization & Parsing:** Normalizes protocol, hostname, registered domain, subdomain, port, query params, and encoded characters.
   2. **SSRF & Network Safety:** Protects internal cloud/infrastructure by detecting loopback, private subnets (`10.x`, `172.16-31.x`, `192.168.x`), and link-local metadata IPs (`169.254.169.254`).
   3. **DNS Intelligence:** Resolves A, AAAA, MX, NS, TXT, and CNAME records via asynchronous DNS lookups.
-  4. **DNS IP Tracking & Geolocation:** Tracks IPv4 & IPv6 addresses mapped from web URLs via DNS resolution, reverse DNS (PTR) records, geographic coordinates (Lat/Lon), country, city, ISP, ASN, and live TCP latency.
+  4. **DNS IP Tracking & Original Website Location:** Traces the Authoritative Original Corporate Headquarters / Origin Location for websites alongside the live DNS-resolved Anycast/CDN edge PoP, reverse DNS (PTR) records, geographic coordinates (Lat/Lon), country, city, ISP, ASN, and live TCP latency.
   5. **TLS / HTTPS Audit:** Inspects SSL/TLS certificate validity, issuer, subject alternative names (SANs), expiration days remaining, and protocol security.
   6. **Redirect Tracking:** Follows up to 5 redirect hops, detecting HTTPS-to-HTTP security downgrades, cross-domain jumps, and circular loops.
   7. **HTTP & Cookie Security:** Audits security headers (`HSTS`, `CSP`, `X-Frame-Options`, `X-Content-Type-Options`) and cookie security flags (`HttpOnly`, `Secure`, `SameSite`).

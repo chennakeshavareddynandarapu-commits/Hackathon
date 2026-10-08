@@ -254,6 +254,59 @@
           </div>
         </div>
 
+        <!-- DUAL LOCATION PIPELINE: ORIGINAL HEADQUARTERS VS RESOLVED DNS EDGE -->
+        <div class="location-pipeline-container">
+          <div class="location-box origin-box">
+            <div class="location-box-header">
+              <span class="location-badge origin-badge">🏢 ORIGINAL HEADQUARTERS</span>
+              <span id="origin-founded-badge" class="pill-badge light-badge">ORIGIN</span>
+            </div>
+            <div class="location-main-info">
+              <span id="origin-platform-name" class="location-title">Target Platform / Organization</span>
+              <div class="location-geo-line">
+                <span id="origin-geo-flag" class="location-flag">🌐</span>
+                <span id="origin-geo-text" class="location-address">Awaiting Target URL...</span>
+              </div>
+              <div class="location-meta-row">
+                <span id="origin-coords" class="meta-item mono-val">LAT: -- | LON: --</span>
+                <span id="origin-timezone" class="meta-item">TZ: --</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="pipeline-connector">
+            <div class="connector-line"></div>
+            <div class="connector-badge">
+              <svg viewBox="0 0 24 24"><path d="M16.01 11H4v2h12.01v3L20 12l-3.99-4z"/></svg>
+              <span id="routing-edge-tag">EDGE ROUTING</span>
+            </div>
+          </div>
+
+          <div class="location-box edge-box">
+            <div class="location-box-header">
+              <span class="location-badge edge-badge">⚡ RESOLVED DNS EDGE (PoP)</span>
+              <span id="edge-latency-badge" class="pill-badge light-badge">DNS ROUTE</span>
+            </div>
+            <div class="location-main-info">
+              <span id="edge-isp-name" class="location-title">Network Edge Server / Cloud</span>
+              <div class="location-geo-line">
+                <span id="edge-geo-flag" class="location-flag">🌐</span>
+                <span id="edge-geo-text" class="location-address">Awaiting Target Resolution...</span>
+              </div>
+              <div class="location-meta-row">
+                <span id="edge-coords" class="meta-item mono-val">LAT: -- | LON: --</span>
+                <span id="edge-timezone" class="meta-item">TZ: --</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ROUTING INSIGHT BANNER -->
+        <div id="routing-insight-bar" class="routing-insight-bar">
+          <span class="insight-label">ROUTING INSIGHT:</span>
+          <span id="routing-insight-text">Submit a target URL above to trace its original corporate headquarters and live DNS edge location.</span>
+        </div>
+
         <!-- IP TELEMETRY TILES GRID -->
         <div class="ip-telemetry-grid">
           

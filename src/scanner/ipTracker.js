@@ -3,6 +3,7 @@ const net = require('net');
 const http = require('http');
 const https = require('https');
 const { checkIpRestricted } = require('../security/ssrfProtection');
+const { getWebsiteOriginLocation } = require('../intelligence/knownWebsitesDatabase');
 
 // In-memory cache for IP Geolocation & Telemetry to ensure fast repeated queries
 const ipGeoCache = new Map();
@@ -305,6 +306,45 @@ async function trackIpFromDns(hostname, existingDnsInfo = null) {
     };
   });
 
+  // 6. Authoritative Website Original Location / Corporate Headquarters
+  const originData = getWebsiteOriginLocation(cleanHost);
+  const originalLocation = originData ? {
+    platform: originData.platform,
+    headquarters: originData.headquarters,
+    city: originData.city,
+    region: originData.region,
+    country: originData.country,
+    countryCode: originData.countryCode,
+    flag: originData.flag,
+    lat: originData.lat,
+    lon: originData.lon,
+    timezone: originData.timezone,
+    originType: originData.originType,
+    founded: originData.founded || null,
+    isKnownWebsite: originData.isKnownWebsite,
+    source: originData.source
+  } : {
+    platform: cleanHost,
+    headquarters: `${geoResult.city}, ${geoResult.country}`,
+    city: geoResult.city,
+    region: geoResult.region,
+    country: geoResult.country,
+    countryCode: geoResult.countryCode,
+    flag: geoResult.flag,
+    lat: geoResult.lat,
+    lon: geoResult.lon,
+    timezone: geoResult.timezone,
+    originType: 'Direct Hosting Origin (DNS Edge Aligned)',
+    isKnownWebsite: false,
+    source: 'DNS_RESOLVED_AUTHORITY'
+  };
+
+  // 7. Routing Comparison Insight
+  const isCdnRouted = originalLocation.countryCode !== geoResult.countryCode && !restriction.isPrivate;
+  const routingInsight = isCdnRouted
+    ? `Global Anycast Edge CDN: Traffic originated at ${originalLocation.country} ${originalLocation.flag} and routed to edge server in ${geoResult.country} ${geoResult.flag} (${probe.latencyMs ? probe.latencyMs + 'ms' : 'active'})`
+    : `Direct Regional Server: Target originated and routed within ${originalLocation.country} ${originalLocation.flag}`;
+
   return {
     success: true,
     targetHost: cleanHost,
@@ -318,6 +358,9 @@ async function trackIpFromDns(hostname, existingDnsInfo = null) {
     allTrackedIps,
     cnameRecords,
     reverseDns: reverseDnsName,
+    originalLocation,
+    resolvedLocation: geoResult,
+    routingInsight,
     geo: geoResult,
     infrastructure: infraResult,
     latencyMs: probe.latencyMs,

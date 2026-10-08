@@ -206,6 +206,8 @@ app.post('/api/report', (req, res) => {
   }
 
   const ipt = data.ipTracking || {};
+  const orig = ipt.originalLocation || {};
+  const resLoc = ipt.resolvedLocation || ipt.geo || {};
   const geo = ipt.geo || {};
   const infra = ipt.infrastructure || {};
 
@@ -227,13 +229,16 @@ Target Status:   ${data.targetStatus || 'ONLINE'}
 -------------------------------------------------------------------
 DNS IP TRACKING & GEOLOCATION TELEMETRY
 -------------------------------------------------------------------
+• Original Website (HQ):${orig.headquarters ? `${orig.headquarters} ${orig.flag || ''} [${orig.platform || 'Origin'}]` : 'N/A'}
+• Origin Classification:${orig.originType || 'N/A'}
 • Primary Resolved IP:  ${ipt.primaryIp || (data.dns && data.dns.a ? data.dns.a[0] : 'N/A')} (${ipt.ipVersion || 'IPv4'})
 • Reverse DNS (PTR):    ${ipt.reverseDns || 'N/A'}
+• Resolved Edge PoP:    ${resLoc.city ? `${resLoc.city}, ${resLoc.region}, ${resLoc.country} ${resLoc.flag || ''}` : (geo.city ? `${geo.city}, ${geo.region}, ${geo.country}` : 'N/A')}
+• Routing Insight:      ${ipt.routingInsight || 'Direct Edge Connection'}
 • DNS Resolution Time:  ${ipt.dnsLookupTimeMs ? `${ipt.dnsLookupTimeMs}ms` : 'N/A'}
 • Total Resolved IPs:   ${ipt.totalIpsCount || (data.dns ? (data.dns.a.length + data.dns.aaaa.length) : 'N/A')}
-• Geo Location:         ${geo.city ? `${geo.city}, ${geo.region}, ${geo.country}` : 'N/A'}
-• Coordinates:          ${geo.lat !== undefined ? `${geo.lat}, ${geo.lon}` : 'N/A'}
-• Timezone:             ${geo.timezone || 'N/A'}
+• Coordinates:          ${resLoc.lat !== undefined ? `${resLoc.lat}, ${resLoc.lon}` : 'N/A'}
+• Timezone:             ${resLoc.timezone || 'N/A'}
 • ISP / Organization:   ${geo.isp || geo.org || 'N/A'}
 • Autonomous System:    ${geo.asn || 'N/A'}
 • Infrastructure:       ${infra.networkType || 'N/A'}

@@ -58,16 +58,25 @@ class ScannerUI {
       if (data.ipTracking) {
         this.currentIpTracking = data.ipTracking;
         this.renderIpTracking(data.ipTracking);
+        const orig = data.ipTracking.originalLocation;
+        if (orig?.headquarters) {
+          this.logTerminal(`[${this.getTimestamp()}] [ORIGINAL HQ] ${orig.platform}: ${orig.headquarters} ${orig.flag || ''}`);
+        }
         const geoInfo = data.ipTracking.geo?.country ? ` (${data.ipTracking.geo.city || 'Edge'}, ${data.ipTracking.geo.country})` : '';
-        this.logTerminal(`[${this.getTimestamp()}] [DNS IP TRACKER] Resolved: ${data.ipTracking.primaryIp}${geoInfo} | Latency: ${data.ipTracking.latencyMs || 'N/A'}ms`);
+        this.logTerminal(`[${this.getTimestamp()}] [DNS EDGE PoP] Resolved: ${data.ipTracking.primaryIp}${geoInfo} | Latency: ${data.ipTracking.latencyMs || 'N/A'}ms`);
+        if (data.ipTracking.routingInsight) {
+          this.logTerminal(`[${this.getTimestamp()}] [ROUTING] ${data.ipTracking.routingInsight}`);
+        }
       }
 
       this.logTerminal(`[${this.getTimestamp()}] ANALYSIS COMPLETE. SCORE: ${data.score}/100 [${data.status}]`);
 
       // Vocal Feedback
       if (window.voiceManager) {
-        const ipReadout = data.ipTracking?.primaryIp ? ` Hosted on IP ${data.ipTracking.primaryIp}.` : '';
-        const vocalMessage = `Scan complete for ${data.components ? data.components.registeredDomain : 'target'}.${ipReadout} Security score ${data.score} out of 100. Verdict: ${data.status}.`;
+        const origReadout = data.ipTracking?.originalLocation?.headquarters 
+          ? ` Originally located in ${data.ipTracking.originalLocation.headquarters}.` 
+          : '';
+        const vocalMessage = `Scan complete for ${data.components ? data.components.registeredDomain : 'target'}.${origReadout} Security score ${data.score} out of 100. Verdict: ${data.status}.`;
         window.voiceManager.speak(vocalMessage);
       }
 
@@ -135,10 +144,17 @@ class ScannerUI {
       }
 
       const geoStr = ipData.geo?.city ? `${ipData.geo.city}, ${ipData.geo.country}` : (ipData.geo?.country || 'Location mapped');
-      this.logTerminal(`[${this.getTimestamp()}] IP TRACK SUCCESS: ${ipData.primaryIp} (${geoStr}) [${ipData.infrastructure?.provider || 'Host'}]`);
+      if (ipData.originalLocation?.headquarters) {
+        this.logTerminal(`[${this.getTimestamp()}] [ORIGINAL HQ] ${ipData.originalLocation.platform}: ${ipData.originalLocation.headquarters} ${ipData.originalLocation.flag || ''}`);
+      }
+      this.logTerminal(`[${this.getTimestamp()}] [DNS EDGE PoP] ${ipData.primaryIp} (${geoStr}) via ${ipData.infrastructure?.provider || 'Host'}`);
+      if (ipData.routingInsight) {
+        this.logTerminal(`[${this.getTimestamp()}] [ROUTING] ${ipData.routingInsight}`);
+      }
 
       if (window.voiceManager) {
-        window.voiceManager.speak(`DNS resolved target to IP address ${ipData.primaryIp} located in ${ipData.geo?.country || 'global network'}.`);
+        const origReadout = ipData.originalLocation?.headquarters ? ` Originally headquartered in ${ipData.originalLocation.headquarters}.` : '';
+        window.voiceManager.speak(`DNS resolved target to IP address ${ipData.primaryIp}.${origReadout} Edge server in ${ipData.geo?.country || 'global network'}.`);
       }
 
     } catch (err) {
@@ -243,6 +259,60 @@ class ScannerUI {
 
     const poolList = document.getElementById('dns-pool-list');
     const poolCount = document.getElementById('dns-pool-count');
+
+    // Dual Location Pipeline Elements
+    const origPlatformElem = document.getElementById('origin-platform-name');
+    const origFlagElem = document.getElementById('origin-geo-flag');
+    const origGeoElem = document.getElementById('origin-geo-text');
+    const origCoordsElem = document.getElementById('origin-coords');
+    const origTimezoneElem = document.getElementById('origin-timezone');
+    const origFoundedBadge = document.getElementById('origin-founded-badge');
+
+    const edgeIspElem = document.getElementById('edge-isp-name');
+    const edgeFlagElem = document.getElementById('edge-geo-flag');
+    const edgeGeoElem = document.getElementById('edge-geo-text');
+    const edgeCoordsElem = document.getElementById('edge-coords');
+    const edgeTimezoneElem = document.getElementById('edge-timezone');
+    const edgeLatencyBadge = document.getElementById('edge-latency-badge');
+    const routingTag = document.getElementById('routing-edge-tag');
+    const routingInsightText = document.getElementById('routing-insight-text');
+
+    const orig = ipData.originalLocation || {};
+    const resLoc = ipData.resolvedLocation || ipData.geo || {};
+
+    // Populate Original Headquarters
+    if (origPlatformElem) origPlatformElem.textContent = orig.platform || ipData.targetHost;
+    if (origFlagElem) origFlagElem.textContent = orig.flag || '🌐';
+    if (origGeoElem) origGeoElem.textContent = orig.headquarters || `${orig.city || 'Origin'}, ${orig.country || 'Global'}`;
+    if (origCoordsElem) {
+      const oLat = orig.lat !== undefined ? Number(orig.lat).toFixed(4) : '--';
+      const oLon = orig.lon !== undefined ? Number(orig.lon).toFixed(4) : '--';
+      origCoordsElem.textContent = `LAT: ${oLat} | LON: ${oLon}`;
+    }
+    if (origTimezoneElem) origTimezoneElem.textContent = `TZ: ${orig.timezone || 'UTC'}`;
+    if (origFoundedBadge) {
+      origFoundedBadge.textContent = orig.founded ? `FOUNDED ${orig.founded}` : (orig.originType ? orig.originType.slice(0, 15) : 'ORIGIN');
+    }
+
+    // Populate Resolved DNS Edge
+    if (edgeIspElem) edgeIspElem.textContent = `${resLoc.isp || ipData.infrastructure?.provider || 'DNS Edge Server'}`;
+    if (edgeFlagElem) edgeFlagElem.textContent = resLoc.flag || '🌐';
+    if (edgeGeoElem) edgeGeoElem.textContent = `${resLoc.city || 'Edge'}, ${resLoc.region || ''}, ${resLoc.country || ''}`;
+    if (edgeCoordsElem) {
+      const eLat = resLoc.lat !== undefined ? Number(resLoc.lat).toFixed(4) : '--';
+      const eLon = resLoc.lon !== undefined ? Number(resLoc.lon).toFixed(4) : '--';
+      edgeCoordsElem.textContent = `LAT: ${eLat} | LON: ${eLon}`;
+    }
+    if (edgeTimezoneElem) edgeTimezoneElem.textContent = `TZ: ${resLoc.timezone || 'UTC'}`;
+    if (edgeLatencyBadge) {
+      edgeLatencyBadge.textContent = ipData.latencyMs ? `${ipData.latencyMs}ms ROUTE` : 'DNS ROUTE';
+    }
+    if (routingTag) {
+      routingTag.textContent = ipData.infrastructure?.isCdn ? 'ANYCAST CDN' : 'DIRECT ROUTE';
+    }
+    if (routingInsightText) {
+      routingInsightText.textContent = ipData.routingInsight || `Traffic resolved to ${resLoc.country} via ${ipData.infrastructure?.provider || 'host'}.`;
+    }
 
     // 1. Primary IP
     if (primaryIpElem) {
