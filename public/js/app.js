@@ -4,6 +4,8 @@
 document.addEventListener('DOMContentLoaded', () => {
   const searchInput = document.getElementById('search-input');
   const scanBtn = document.getElementById('scan-btn');
+  const trackIpBtn = document.getElementById('track-ip-btn');
+  const copyIpBtn = document.getElementById('copy-ip-btn');
   const micBtn = document.getElementById('mic-btn');
   const audioToggleBtn = document.getElementById('audio-toggle-btn');
   const clearHistoryBtn = document.getElementById('clear-history-btn');
@@ -19,6 +21,20 @@ document.addEventListener('DOMContentLoaded', () => {
       if (e.key === 'Enter') {
         window.scannerUI.runScan(searchInput.value);
       }
+    });
+  }
+
+  // Trigger Standalone DNS IP Tracker on Button Click
+  if (trackIpBtn && searchInput) {
+    trackIpBtn.addEventListener('click', () => {
+      window.scannerUI.trackIpOnly(searchInput.value);
+    });
+  }
+
+  // Copy Primary Tracked IP Button
+  if (copyIpBtn) {
+    copyIpBtn.addEventListener('click', () => {
+      window.scannerUI.copyPrimaryIp();
     });
   }
 

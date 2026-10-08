@@ -11,6 +11,7 @@ const { analyzeTls } = require('./src/scanner/tlsAnalyzer');
 const { analyzeRedirects } = require('./src/scanner/redirectAnalyzer');
 const { analyzeHeaders } = require('./src/scanner/headerAnalyzer');
 const { analyzePhishingAndObfuscation } = require('./src/scanner/phishingAnalyzer');
+const { trackIpFromDns } = require('./src/scanner/ipTracker');
 const threatIntelManager = require('./src/intelligence/threatIntelManager');
 const { evaluateRiskAndConfidence } = require('./src/scoring/riskEngine');
 
@@ -60,7 +61,7 @@ app.post('/api/scan', async (req, res) => {
     // B. SSRF Safety & Local Host Check
     const ssrfCheck = isSsrfSafeHost(urlInfo.hostname);
 
-    // C. Concurrent Diagnostic Investigations
+    // C. Concurrent Diagnostic Investigations including DNS & IP Tracking
     const [dnsInfo, tlsInfo, redirectInfo, headerInfo, threatIntel] = await Promise.all([
       analyzeDns(urlInfo.hostname),
       analyzeTls(urlInfo.hostname, urlInfo.port),
@@ -69,14 +70,18 @@ app.post('/api/scan', async (req, res) => {
       threatIntelManager.queryAll(urlInfo.normalizedUrl, urlInfo.hostname)
     ]);
 
-    // D. Phishing, Brand Impersonation & Obfuscation Analysis
+    // D. DNS-based IP Tracking & Geolocation Telemetry
+    const ipTracking = await trackIpFromDns(urlInfo.hostname, dnsInfo);
+
+    // E. Phishing, Brand Impersonation & Obfuscation Analysis
     const phishingObfuscation = analyzePhishingAndObfuscation(urlInfo);
 
-    // E. Risk Correlation & Confidence Scoring Engine
+    // F. Risk Correlation & Confidence Scoring Engine
     const verdict = evaluateRiskAndConfidence({
       urlInfo,
       ssrfCheck,
       dnsInfo,
+      ipTracking,
       tlsInfo,
       redirectInfo,
       headerInfo,
@@ -84,7 +89,7 @@ app.post('/api/scan', async (req, res) => {
       threatIntel
     });
 
-    // F. Construct Final Intelligence Response
+    // G. Construct Final Intelligence Response
     const responsePayload = {
       success: true,
       url: urlInfo.originalInput,
@@ -114,7 +119,9 @@ app.post('/api/scan', async (req, res) => {
         brandImpersonation: phishingObfuscation.brandImpersonation ? phishingObfuscation.brandImpersonation.impersonationDetected : false,
         middleDomainStatus: phishingObfuscation.middleDomainAnalysis.status,
         middleDomainIssues: phishingObfuscation.middleDomainAnalysis.issues,
-        knownWebsiteMatch: phishingObfuscation.knownWebsiteMatch
+        knownWebsiteMatch: phishingObfuscation.knownWebsiteMatch,
+        ipResolved: !!ipTracking.primaryIp,
+        ipPrivate: ipTracking.isPrivate
       },
       dns: {
         resolvable: dnsInfo.resolvable,
@@ -125,6 +132,7 @@ app.post('/api/scan', async (req, res) => {
         txt: dnsInfo.txt,
         cname: dnsInfo.cname
       },
+      ipTracking,
       tls: {
         httpsAvailable: tlsInfo.httpsAvailable,
         authorized: tlsInfo.authorized,
@@ -162,12 +170,44 @@ app.post('/api/scan', async (req, res) => {
   }
 });
 
-// 3. Security Investigation Report Generator Endpoint
+// 3. Standalone DNS IP Tracker API Endpoint
+app.post('/api/track-ip', async (req, res) => {
+  try {
+    const { url, host } = req.body;
+    const target = url || host;
+
+    if (!target || typeof target !== 'string') {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'INVALID_INPUT', message: 'Target URL or host domain string is required.' }
+      });
+    }
+
+    const ipTracking = await trackIpFromDns(target);
+    return res.json({
+      success: true,
+      target,
+      ipTracking
+    });
+  } catch (err) {
+    console.error('IP tracking error:', err);
+    return res.status(500).json({
+      success: false,
+      error: { code: 'IP_TRACK_ERROR', message: 'Failed to track IP address from target URL.' }
+    });
+  }
+});
+
+// 4. Security Investigation Report Generator Endpoint
 app.post('/api/report', (req, res) => {
   const data = req.body;
   if (!data || !data.url) {
     return res.status(400).json({ error: 'Scan result data is required to generate a report.' });
   }
+
+  const ipt = data.ipTracking || {};
+  const geo = ipt.geo || {};
+  const infra = ipt.infrastructure || {};
 
   const reportText = `===================================================================
 SAVEE // GLOBAL AI SECURITY INVESTIGATION REPORT
@@ -185,13 +225,29 @@ Confidence:      ${data.confidence}%
 Target Status:   ${data.targetStatus || 'ONLINE'}
 
 -------------------------------------------------------------------
+DNS IP TRACKING & GEOLOCATION TELEMETRY
+-------------------------------------------------------------------
+• Primary Resolved IP:  ${ipt.primaryIp || (data.dns && data.dns.a ? data.dns.a[0] : 'N/A')} (${ipt.ipVersion || 'IPv4'})
+• Reverse DNS (PTR):    ${ipt.reverseDns || 'N/A'}
+• DNS Resolution Time:  ${ipt.dnsLookupTimeMs ? `${ipt.dnsLookupTimeMs}ms` : 'N/A'}
+• Total Resolved IPs:   ${ipt.totalIpsCount || (data.dns ? (data.dns.a.length + data.dns.aaaa.length) : 'N/A')}
+• Geo Location:         ${geo.city ? `${geo.city}, ${geo.region}, ${geo.country}` : 'N/A'}
+• Coordinates:          ${geo.lat !== undefined ? `${geo.lat}, ${geo.lon}` : 'N/A'}
+• Timezone:             ${geo.timezone || 'N/A'}
+• ISP / Organization:   ${geo.isp || geo.org || 'N/A'}
+• Autonomous System:    ${geo.asn || 'N/A'}
+• Infrastructure:       ${infra.networkType || 'N/A'}
+• Network Latency:      ${ipt.latencyMs !== null && ipt.latencyMs !== undefined ? `${ipt.latencyMs}ms` : 'N/A'}
+• Private/SSRF Safe:    ${ipt.isPrivate ? 'PRIVATE ADDRESS (SSRF RESTRICTED)' : 'PUBLICLY ROUTED IP'}
+
+-------------------------------------------------------------------
 COMPONENT BREAKDOWN
 -------------------------------------------------------------------
-• Protocol:      ${data.components ? data.components.protocol : 'N/A'}
-• Hostname:      ${data.components ? data.components.hostname : 'N/A'}
+• Protocol:          ${data.components ? data.components.protocol : 'N/A'}
+• Hostname:          ${data.components ? data.components.hostname : 'N/A'}
 • Registered Domain: ${data.components ? data.components.registeredDomain : 'N/A'}
-• HTTPS Status:  ${data.checks ? (data.checks.https ? 'SECURE (HTTPS)' : 'UNENCRYPTED (HTTP)') : 'N/A'}
-• DNS Status:    ${data.dns ? (data.dns.resolvable ? 'RESOLVABLE' : 'UNRESOLVED') : 'N/A'}
+• HTTPS Status:      ${data.checks ? (data.checks.https ? 'SECURE (HTTPS)' : 'UNENCRYPTED (HTTP)') : 'N/A'}
+• DNS Resolvability: ${data.dns ? (data.dns.resolvable ? 'RESOLVABLE' : 'UNRESOLVED') : 'N/A'}
 
 -------------------------------------------------------------------
 RISK INDICATORS & ANOMALIES

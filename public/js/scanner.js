@@ -1,10 +1,12 @@
 /**
  * SAVEE Scanner UI Controller
- * Manages API calls, live terminal animations, gauge updates, breakdown cards, and report exports.
+ * Manages API calls, live terminal animations, gauge updates, breakdown cards,
+ * DNS IP Tracking telemetry, and report exports.
  */
 class ScannerUI {
   constructor() {
     this.currentScanResult = null;
+    this.currentIpTracking = null;
   }
 
   async runScan(urlInput) {
@@ -21,6 +23,7 @@ class ScannerUI {
       'NORMALIZING TARGET & EXTRACTING DOMAIN',
       'VALIDATING SSRF & IP BOUNDARIES',
       'RESOLVING DNS RECORDS (A, AAAA, MX, NS, TXT)',
+      'TRACKING HOST IP ADDRESS & GEOLOCATION (ASN/ISP)',
       'AUDITING TLS / HTTPS ENCRYPTION CERTIFICATE',
       'TRACKING REDIRECT CHAINS & PROBING HEADERS',
       'ANALYZING PHISHING SIGNALS & BRAND IMPERSONATION',
@@ -30,7 +33,7 @@ class ScannerUI {
 
     for (const step of steps) {
       this.logTerminal(`[${this.getTimestamp()}] ${step}...`);
-      await new Promise(r => setTimeout(r, 120));
+      await new Promise(r => setTimeout(r, 110));
     }
 
     try {
@@ -51,11 +54,20 @@ class ScannerUI {
 
       this.currentScanResult = data;
       this.renderResults(data);
+
+      if (data.ipTracking) {
+        this.currentIpTracking = data.ipTracking;
+        this.renderIpTracking(data.ipTracking);
+        const geoInfo = data.ipTracking.geo?.country ? ` (${data.ipTracking.geo.city || 'Edge'}, ${data.ipTracking.geo.country})` : '';
+        this.logTerminal(`[${this.getTimestamp()}] [DNS IP TRACKER] Resolved: ${data.ipTracking.primaryIp}${geoInfo} | Latency: ${data.ipTracking.latencyMs || 'N/A'}ms`);
+      }
+
       this.logTerminal(`[${this.getTimestamp()}] ANALYSIS COMPLETE. SCORE: ${data.score}/100 [${data.status}]`);
 
       // Vocal Feedback
       if (window.voiceManager) {
-        const vocalMessage = `Scan complete for ${data.components ? data.components.registeredDomain : 'target'}. Security score ${data.score} out of 100. Verdict: ${data.status}. Confidence ${data.confidence} percent.`;
+        const ipReadout = data.ipTracking?.primaryIp ? ` Hosted on IP ${data.ipTracking.primaryIp}.` : '';
+        const vocalMessage = `Scan complete for ${data.components ? data.components.registeredDomain : 'target'}.${ipReadout} Security score ${data.score} out of 100. Verdict: ${data.status}.`;
         window.voiceManager.speak(vocalMessage);
       }
 
@@ -67,6 +79,70 @@ class ScannerUI {
 
     } catch (err) {
       this.logTerminal(`[${this.getTimestamp()}] NETWORK ERROR: Failed to connect to security gateway.`);
+      alert('Network Error: Server unreachable.');
+    }
+  }
+
+  /**
+   * Dedicated DNS IP Tracking mode for instant domain/URL resolution
+   */
+  async trackIpOnly(urlInput) {
+    if (!urlInput || !urlInput.trim()) {
+      alert('Please enter a target URL or domain to track its IP.');
+      return;
+    }
+
+    const trimmedUrl = urlInput.trim();
+    this.logTerminal(`[${this.getTimestamp()}] TRACKING IP ADDRESS VIA DNS: ${trimmedUrl}`);
+
+    const steps = [
+      'PARSING WEB TARGET HOSTNAME',
+      'QUERYING DNS NAMESERVERS (A & AAAA ADDRESSES)',
+      'PERFORMING REVERSE DNS (PTR) LOOKUP',
+      'FETCHING GEOLOCATION & AUTONOMOUS SYSTEM INTEL',
+      'PROBING TCP ENDPOINT LATENCY'
+    ];
+
+    for (const step of steps) {
+      this.logTerminal(`[${this.getTimestamp()}] ${step}...`);
+      await new Promise(r => setTimeout(r, 90));
+    }
+
+    try {
+      const response = await fetch('/api/track-ip', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: trimmedUrl })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        const errorMsg = data.error ? data.error.message : 'IP tracking failed.';
+        this.logTerminal(`[${this.getTimestamp()}] DNS IP TRACK ERROR: ${errorMsg}`);
+        alert(`DNS IP Track Error: ${errorMsg}`);
+        return;
+      }
+
+      const ipData = data.ipTracking;
+      this.currentIpTracking = ipData;
+      this.renderIpTracking(ipData);
+
+      // Scroll smoothly to IP tracker section
+      const ipSection = document.getElementById('ip-tracker-section');
+      if (ipSection) {
+        ipSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+
+      const geoStr = ipData.geo?.city ? `${ipData.geo.city}, ${ipData.geo.country}` : (ipData.geo?.country || 'Location mapped');
+      this.logTerminal(`[${this.getTimestamp()}] IP TRACK SUCCESS: ${ipData.primaryIp} (${geoStr}) [${ipData.infrastructure?.provider || 'Host'}]`);
+
+      if (window.voiceManager) {
+        window.voiceManager.speak(`DNS resolved target to IP address ${ipData.primaryIp} located in ${ipData.geo?.country || 'global network'}.`);
+      }
+
+    } catch (err) {
+      this.logTerminal(`[${this.getTimestamp()}] NETWORK ERROR: Failed to connect to IP tracking service.`);
       alert('Network Error: Server unreachable.');
     }
   }
@@ -137,6 +213,169 @@ class ScannerUI {
     }
   }
 
+  /**
+   * Renders DNS IP Tracking and Geolocation HUD
+   */
+  renderIpTracking(ipData) {
+    if (!ipData) return;
+
+    // Elements
+    const primaryIpElem = document.getElementById('tracked-primary-ip');
+    const versionBadge = document.getElementById('ip-version-badge');
+    const routeBadge = document.getElementById('ip-route-badge');
+    const reverseDnsElem = document.getElementById('tracked-reverse-dns');
+    const dnsResolutionPill = document.getElementById('dns-resolution-pill');
+    const pingText = document.getElementById('ip-ping-text');
+    const coordsText = document.getElementById('tracked-coords-text');
+    const timezoneText = document.getElementById('tracked-timezone-text');
+
+    const geoFlag = document.getElementById('tracked-geo-flag');
+    const geoLocation = document.getElementById('tracked-geo-location');
+    const geoRegion = document.getElementById('tracked-geo-region');
+
+    const ispElem = document.getElementById('tracked-isp');
+    const orgElem = document.getElementById('tracked-org');
+    const asnElem = document.getElementById('tracked-asn');
+    const networkTypeElem = document.getElementById('tracked-network-type');
+
+    const infraBadge = document.getElementById('tracked-infra-badge');
+    const infraDetail = document.getElementById('tracked-infra-detail');
+
+    const poolList = document.getElementById('dns-pool-list');
+    const poolCount = document.getElementById('dns-pool-count');
+
+    // 1. Primary IP
+    if (primaryIpElem) {
+      primaryIpElem.textContent = ipData.primaryIp || 'Unresolved';
+    }
+
+    // 2. Badges
+    if (versionBadge) {
+      versionBadge.textContent = ipData.ipVersion || 'IPv4';
+    }
+    if (routeBadge) {
+      if (ipData.isPrivate) {
+        routeBadge.textContent = 'PRIVATE IP (SSRF GUARD)';
+        routeBadge.className = 'ip-tech-badge route-private';
+      } else {
+        routeBadge.textContent = 'PUBLIC ROUTE';
+        routeBadge.className = 'ip-tech-badge route-safe';
+      }
+    }
+
+    // 3. Reverse DNS
+    if (reverseDnsElem) {
+      reverseDnsElem.textContent = ipData.reverseDns || 'No PTR Record';
+    }
+
+    // 4. Pills (DNS duration & Latency ping)
+    if (dnsResolutionPill) {
+      dnsResolutionPill.textContent = ipData.dnsLookupTimeMs !== undefined 
+        ? `DNS RESOLVED (${ipData.dnsLookupTimeMs}ms)` 
+        : 'DNS RESOLVED';
+      dnsResolutionPill.className = 'pill-badge amber-badge';
+    }
+    if (pingText) {
+      if (ipData.latencyMs !== null && ipData.latencyMs !== undefined) {
+        pingText.textContent = `LATENCY: ${ipData.latencyMs}ms`;
+      } else {
+        pingText.textContent = ipData.status === 'LOCAL' ? 'LATENCY: <1ms (LOCAL)' : 'LATENCY: PROBE TIMEOUT';
+      }
+    }
+
+    // 5. Coordinates & Timezone
+    const geo = ipData.geo || {};
+    if (coordsText) {
+      const lat = geo.lat !== undefined ? Number(geo.lat).toFixed(4) : '--';
+      const lon = geo.lon !== undefined ? Number(geo.lon).toFixed(4) : '--';
+      coordsText.textContent = `LAT: ${lat} | LON: ${lon}`;
+    }
+    if (timezoneText) {
+      timezoneText.textContent = `TIMEZONE: ${geo.timezone || 'UTC'}`;
+    }
+
+    // 6. Geolocation Tiles
+    if (geoFlag) geoFlag.textContent = geo.flag || '🌐';
+    if (geoLocation) {
+      geoLocation.textContent = geo.city && geo.country 
+        ? `${geo.city}, ${geo.country}` 
+        : (geo.country || 'Global Anycast');
+    }
+    if (geoRegion) {
+      geoRegion.textContent = geo.region 
+        ? `${geo.region} (${geo.countryCode || 'INT'})` 
+        : 'Distributed Region';
+    }
+
+    // 7. ISP & Org
+    if (ispElem) ispElem.textContent = geo.isp || 'Global Network';
+    if (orgElem) orgElem.textContent = geo.org || 'Cloud Infrastructure';
+
+    // 8. ASN & Routing
+    if (asnElem) asnElem.textContent = geo.asn || 'AS-UNKNOWN';
+    if (networkTypeElem) {
+      networkTypeElem.textContent = ipData.infrastructure?.networkType || 'BGP Routing';
+    }
+
+    // 9. Infrastructure
+    if (infraBadge) {
+      infraBadge.textContent = ipData.infrastructure?.provider || 'Web Host';
+    }
+    if (infraDetail) {
+      const cdnTag = ipData.infrastructure?.isCdn ? 'CDN Active' : 'Direct Host';
+      const cloudTag = ipData.infrastructure?.isCloud ? 'Cloud Architecture' : 'Dedicated Server';
+      infraDetail.textContent = `${cdnTag} • ${cloudTag}`;
+    }
+
+    // 10. DNS Resolved Address Pool Chips
+    if (poolList && poolCount) {
+      poolList.innerHTML = '';
+      const resolvedList = ipData.resolvedIps || (ipData.primaryIp ? [ipData.primaryIp] : []);
+      poolCount.textContent = `${resolvedList.length} IP ADDRESS${resolvedList.length === 1 ? '' : 'ES'}`;
+
+      if (resolvedList.length === 0) {
+        poolList.innerHTML = '<span class="pool-empty-text">No IP addresses returned by DNS.</span>';
+      } else {
+        resolvedList.forEach((ip, idx) => {
+          const isPrimary = ip === ipData.primaryIp;
+          const isV6 = ip.includes(':');
+          const chip = document.createElement('div');
+          chip.className = `dns-ip-chip ${isPrimary ? 'primary-chip' : ''}`;
+          chip.title = `Click to copy IP: ${ip}`;
+          chip.innerHTML = `
+            <span>${ip}</span>
+            <span class="chip-v-tag">${isV6 ? 'v6' : 'v4'}</span>
+            ${isPrimary ? '<span style="font-size:0.6rem; color:var(--neon-blue); font-weight:800;">PRIMARY</span>' : ''}
+          `;
+          chip.addEventListener('click', () => {
+            this.copyTextToClipboard(ip, `Copied IP ${ip} to clipboard`);
+          });
+          poolList.appendChild(chip);
+        });
+      }
+    }
+  }
+
+  copyPrimaryIp() {
+    if (!this.currentIpTracking || !this.currentIpTracking.primaryIp) {
+      alert('No IP address tracked yet. Investigate a URL first.');
+      return;
+    }
+    this.copyTextToClipboard(this.currentIpTracking.primaryIp, 'Primary IP copied to clipboard!');
+  }
+
+  copyTextToClipboard(text, successMsg) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(() => {
+        this.logTerminal(`[${this.getTimestamp()}] CLIPBOARD: ${successMsg}`);
+      }).catch(() => {
+        prompt('Copy IP manually:', text);
+      });
+    } else {
+      prompt('Copy IP manually:', text);
+    }
+  }
+
   updateCheckCard(cardId, isSafe, text, riskLabel) {
     const card = document.getElementById(cardId);
     if (!card) return;
@@ -165,14 +404,16 @@ class ScannerUI {
     tbody.innerHTML = '';
 
     if (history.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="5" class="empty-ledger-text">No inspection history recorded.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6" class="empty-ledger-text">No inspection history recorded.</td></tr>';
       return;
     }
 
     history.forEach(item => {
+      const primaryIp = item.raw?.ipTracking?.primaryIp || item.raw?.dns?.a?.[0] || 'Unresolved';
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td><a href="#" style="color: var(--neon-blue); font-weight:700; text-decoration:none;" onclick="window.scannerUI.runScan('${item.url}'); return false;">${item.url}</a></td>
+        <td><span style="font-family: var(--font-mono); font-size: 0.85rem; color: #ffffff;">${primaryIp}</span></td>
         <td><span style="font-weight:800; color: ${item.score > 70 ? '#ff007f' : item.score > 30 ? '#b500ff' : '#00f0ff'};">${item.score}/100</span></td>
         <td>${item.status}</td>
         <td>${new Date(item.timestamp).toLocaleTimeString()}</td>

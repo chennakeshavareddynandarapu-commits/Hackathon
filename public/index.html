@@ -36,6 +36,10 @@
           <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
           <span>URL Inspector</span>
         </a>
+        <a href="#ip-tracker-section" class="nav-item">
+          <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+          <span>DNS IP Tracker</span>
+        </a>
         <a href="#ledger-section" class="nav-item">
           <svg viewBox="0 0 24 24"><path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>
           <span>Inspection Ledger</span>
@@ -83,6 +87,11 @@
           <button id="scan-btn" class="amber-pill-btn primary">
             <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
             <span>INVESTIGATE</span>
+          </button>
+
+          <button id="track-ip-btn" class="amber-pill-btn secondary" title="Track IP & Geolocation directly via DNS">
+            <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
+            <span>TRACK IP</span>
           </button>
         </div>
 
@@ -192,6 +201,120 @@
 
       </div>
 
+      <!-- DNS IP TRACKER & GEOLOCATION HUD -->
+      <section id="ip-tracker-section" class="card-container ip-tracker-card">
+        <div class="card-header">
+          <div class="header-with-badge">
+            <div class="card-title-group">
+              <div class="pill-badge blue-badge mb-1">DNS TELEMETRY ENGINE</div>
+              <h3>DNS IP Tracker & Geo Intelligence</h3>
+            </div>
+          </div>
+          <div class="tracker-header-actions">
+            <span id="dns-resolution-pill" class="pill-badge light-badge">DNS: IDLE</span>
+            <span id="ip-ping-pill" class="pill-badge light-badge ping-pill">
+              <span class="ping-pulse-dot"></span>
+              <span id="ip-ping-text">LATENCY: --</span>
+            </span>
+          </div>
+        </div>
+
+        <div class="ip-hero-hud">
+          <div class="ip-hero-left">
+            <div class="ip-label-row">
+              <span class="ip-label-title">PRIMARY RESOLVED IP ADDRESS</span>
+              <span id="ip-version-badge" class="ip-tech-badge">IPv4</span>
+              <span id="ip-route-badge" class="ip-tech-badge route-safe">PUBLIC ROUTE</span>
+            </div>
+            <div class="ip-display-group">
+              <span id="tracked-primary-ip" class="tracked-ip-mono">0.0.0.0</span>
+              <button id="copy-ip-btn" class="icon-pill-btn sm" title="Copy Resolved IP Address">
+                <svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+              </button>
+            </div>
+            <div class="ip-hostname-pointer">
+              <span class="pointer-sublabel">Reverse DNS (PTR):</span>
+              <span id="tracked-reverse-dns" class="pointer-value mono-val">Awaiting Target Investigation...</span>
+            </div>
+          </div>
+
+          <div class="ip-hero-right">
+            <div class="radar-hud-box">
+              <div class="radar-sweep-circle">
+                <div class="radar-blip"></div>
+                <div class="radar-crosshair-h"></div>
+                <div class="radar-crosshair-v"></div>
+              </div>
+              <div class="radar-coords">
+                <div class="coord-label">TARGET GEODATA</div>
+                <div id="tracked-coords-text" class="coord-val">LAT: -- | LON: --</div>
+                <div id="tracked-timezone-text" class="coord-tz">TIMEZONE: --</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- IP TELEMETRY TILES GRID -->
+        <div class="ip-telemetry-grid">
+          
+          <div class="ip-tile">
+            <div class="ip-tile-icon">
+              <span id="tracked-geo-flag" class="flag-icon">🌐</span>
+            </div>
+            <div class="ip-tile-content">
+              <span class="ip-tile-label">Geographic Location</span>
+              <span id="tracked-geo-location" class="ip-tile-val">Awaiting Target...</span>
+              <span id="tracked-geo-region" class="ip-tile-sub">Country, Region, City</span>
+            </div>
+          </div>
+
+          <div class="ip-tile">
+            <div class="ip-tile-icon">
+              <svg viewBox="0 0 24 24"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"/></svg>
+            </div>
+            <div class="ip-tile-content">
+              <span class="ip-tile-label">ISP & Organization</span>
+              <span id="tracked-isp" class="ip-tile-val">Awaiting Target...</span>
+              <span id="tracked-org" class="ip-tile-sub">Network Owner</span>
+            </div>
+          </div>
+
+          <div class="ip-tile">
+            <div class="ip-tile-icon">
+              <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
+            </div>
+            <div class="ip-tile-content">
+              <span class="ip-tile-label">Autonomous System (ASN)</span>
+              <span id="tracked-asn" class="ip-tile-val mono-val">AS-UNKNOWN</span>
+              <span id="tracked-network-type" class="ip-tile-sub">Routing Protocol</span>
+            </div>
+          </div>
+
+          <div class="ip-tile">
+            <div class="ip-tile-icon">
+              <svg viewBox="0 0 24 24"><path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z"/></svg>
+            </div>
+            <div class="ip-tile-content">
+              <span class="ip-tile-label">Infrastructure Category</span>
+              <span id="tracked-infra-badge" class="ip-tile-val">Cloud / Edge CDN</span>
+              <span id="tracked-infra-detail" class="ip-tile-sub">Distributed Architecture</span>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- RESOLVED DNS IP POOL (MULTI-IP ACCORDION) -->
+        <div class="dns-pool-container">
+          <div class="dns-pool-header">
+            <span class="dns-pool-title">Resolved DNS Address Pool (A & AAAA Records)</span>
+            <span id="dns-pool-count" class="pill-badge light-badge">0 IP ADDRESSES</span>
+          </div>
+          <div id="dns-pool-list" class="dns-pool-list">
+            <span class="pool-empty-text">No DNS records resolved yet. Enter a web URL to track.</span>
+          </div>
+        </div>
+      </section>
+
       <!-- TERMINAL THREAT STREAM LOG -->
       <section id="terminal-section" class="card-container terminal-card">
         <div class="card-header">
@@ -221,6 +344,7 @@
             <thead>
               <tr>
                 <th>Target URL</th>
+                <th>Tracked IP</th>
                 <th>Risk Score</th>
                 <th>Status</th>
                 <th>Timestamp</th>
@@ -229,7 +353,7 @@
             </thead>
             <tbody id="history-tbody">
               <tr>
-                <td colspan="5" class="empty-ledger-text">No inspection history recorded.</td>
+                <td colspan="6" class="empty-ledger-text">No inspection history recorded.</td>
               </tr>
             </tbody>
           </table>

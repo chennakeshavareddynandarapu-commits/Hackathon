@@ -16,7 +16,8 @@ function evaluateRiskAndConfidence(analysisData) {
     redirectInfo,
     headerInfo,
     phishingObfuscation,
-    threatIntel
+    threatIntel,
+    ipTracking
   } = analysisData;
 
   let score = 0;
@@ -54,6 +55,17 @@ function evaluateRiskAndConfidence(analysisData) {
     }
   } else {
     details.push('Domain failed DNS resolution (Domain does not resolve or is unregistered).');
+  }
+
+  // 2b. DNS IP Tracking Telemetry
+  if (ipTracking && ipTracking.primaryIp) {
+    confidencePoints += 10;
+    const loc = ipTracking.geo ? `${ipTracking.geo.city || 'Edge'}, ${ipTracking.geo.country}` : 'Global';
+    const provider = ipTracking.infrastructure?.provider || ipTracking.geo?.isp || 'Network Host';
+    details.push(`DNS mapped to IP ${ipTracking.primaryIp} (${loc}) via ${provider}`);
+    if (ipTracking.latencyMs) {
+      details.push(`Resolved endpoint latency: ${ipTracking.latencyMs}ms (${ipTracking.status})`);
+    }
   }
 
   // 3. Encryption / TLS Telemetry
