@@ -1,6 +1,6 @@
-# SAVEE // Global AI Security & URL Risk Inspector
+# URL Analyzer // AI Security & Global Target Risk Inspector
 
-SAVEE is a high-fidelity, cyberpunk security investigation platform and global URL risk analyzer. Re-architected for dynamic multi-dimensional intelligence, SAVEE evaluates any user-supplied URL, domain, IP address, or internationalized Punycode target using live DNS resolution, TLS/HTTPS audit, HTTP security header inspection, redirect chain tracking, contextual phishing & brand impersonation detection, homoglyph/obfuscation analysis, and multi-provider threat intelligence aggregation.
+URL Analyzer is a high-fidelity, cyberpunk security investigation platform and global URL risk analyzer. Re-architected for dynamic multi-dimensional intelligence, URL Analyzer evaluates any user-supplied URL, domain, IP address, or internationalized Punycode target using live DNS resolution, TLS/HTTPS audit, HTTP security header inspection, redirect chain tracking, contextual phishing & brand impersonation detection, homoglyph/obfuscation analysis, and multi-provider threat intelligence aggregation.
 
 ---
 

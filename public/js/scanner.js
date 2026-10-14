@@ -529,7 +529,7 @@ class ScannerUI {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `SAVEE_Report_${Date.now()}.txt`;
+      a.download = `URL_Analyzer_Report_${Date.now()}.txt`;
       document.body.appendChild(a);
       a.click();
       a.remove();

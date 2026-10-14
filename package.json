@@ -1,7 +1,7 @@
 {
-  "name": "savee-url-inspector",
+  "name": "url-analyzer",
   "version": "1.0.0",
-  "description": "SAVEE - AI Security & URL Risk Inspector",
+  "description": "URL Analyzer - AI Security & Global Target Risk Inspector",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
